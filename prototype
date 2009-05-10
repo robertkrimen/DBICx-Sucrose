@@ -1,0 +1,121 @@
+#!/usr/bin/perl -w
+
+use strict;
+use warnings;
+
+package My::Schema;
+
+sub column(@);
+sub method($&);
+sub Integer;
+sub PrimaryKey;
+sub Text;
+sub Blob;
+sub Null;
+sub NotNull;
+
+table( 'Xyzzy', sub {
+
+    column id       => Integer, PrimaryKey,
+                    inflate => sub { '...' },
+                    deflate => sub { '...' };
+
+    column apple    => Text;
+    column banana   => Text, NotNull;
+    column cherry   => Blob, Null;
+
+    unique(qw/ apple /);
+
+    has_many( cds => 'Xyzzy' );
+
+    method run => sub {
+        '...'
+    };
+
+} );
+
+# ---
+
+__END__
+
+package My::Schema;
+
+use DBICx::Sucrose;
+
+table( 'Xyzzy', [
+
+    id      => Integer, PrimaryKey,
+    apple   => Text,
+            inflate { ... },
+            deflate { ... },
+
+    banana  => Text, NotNull,
+    cherry  => Blob, Null,
+
+    unique(qw/ apple /),
+
+    has_many( cds => 'Xyzzy' ),
+
+    method run => sub {
+    },
+
+] );
+
+no DBICx::Sucrose;
+
+# ---
+
+package My::Schema;
+
+use DBICx::Sucrose;
+
+table( 'Xyzzy', [
+
+    id      => qw/ Integer PrimarKey /,
+    apple   => qw/ Text /,
+            inflate { ... },
+            deflate { ... },
+
+    banana  => qw/ Text NotNull /,
+    cherry  => qw/ Blob Null /,
+
+    unique(qw/ apple /),
+
+    has_many( cds => 'Xyzzy' ),
+
+    method run => sub {
+    },
+
+] );
+
+no DBICx::Sucrose;
+
+#---
+
+package My::Schema;
+
+use DBICx::Sucrose;
+
+table( 'Xyzzy', sub {
+
+    column id       => Integer, PrimaryKey,
+                    inflate => sub { '...' },
+                    deflate => sub { '...' };
+
+    column apple    => Text;
+    column banana   => Text, NotNull;
+    column cherry   => Blob, Null;
+
+    unique(qw/ apple /);
+
+    has_many( cds => 'Xyzzy' );
+
+    method run => sub {
+        '...'
+    };
+
+} );
+
+no DBICx::Sucrose;
+
+1;
