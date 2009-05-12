@@ -39,10 +39,11 @@ our $VERSION = '0.01';
 use strict;
 use warnings;
 
-use Moose ();
+use Moose;
 use DBICx::Sucrose::Carp;
 
 use DBICx::Sucrose::Table;
+use DBICx::Sucrose::Token;
 use DBICx::Sucrose::Meta::Class::Table;
 
 use Moose::Exporter;
@@ -54,7 +55,12 @@ our ($Table);
 
 Moose::Exporter->setup_import_methods(
     with_caller => [qw/ table /],
-    as_is => [qw/ load column unique commit has_many belongs_to has_one /],
+    as_is => [qw/
+        column unique commit
+        has_many belongs_to has_one
+        Type Integer Int Text Blob 
+        NotNull Null
+    /],
     also => [qw/ Moose /],
 );
 #    ( with_caller => [qw( has_table has_policy has_one has_many transform )],
@@ -72,6 +78,18 @@ sub _Table() {
     return $Table or croak "No table \"in scope\"!";
 }
 
+sub _moniker_to_table_name {
+    my $self = shift;
+    my $moniker = shift;
+
+    my $table_name = lc $moniker;
+    $table_name =~ s/::/_/g;
+
+    croak "Going from moniker \"$moniker\" to table name \"$table_name\" looks weird" if $table_name =~ m/[^\w_\.]/;
+
+    return $table_name;
+}
+
 sub table {
     my $caller = shift;
     if ($Table) {
@@ -79,16 +97,18 @@ sub table {
     }
     else {
         my $moniker = shift;
-        my $name;
-        if (@_) {
-            $name = shift;
+        my $table_name;
+        if (@_ && ! ref $_[0]) {
+            $table_name = shift;
         }
+        $table_name ||= __PACKAGE__->_moniker_to_table_name( $moniker );
 
         my $Table_class = join '::', $caller, 'Result', $moniker;
         my $Table_class_meta = Moose->init_meta( for_class => $Table_class, base_class => 'DBIx::Class', metaclass => 'DBICx::Sucrose::Meta::Class::Table' );
         $Table = DBICx::Sucrose::Table->new( schema_class => $caller, moniker => $moniker, class => $Table_class, class_meta => $Table_class_meta );
         $Table_class_meta->table( $Table );
-        $Table->table( $name ) if $name;
+        $Table->name( $table_name ) if $table_name;
+
         my $code = shift;
         if ($code) {
             eval {
@@ -104,10 +124,6 @@ sub table {
     }
 }
 
-sub load {
-    return _Table->load( @_ );
-}
-
 sub column {
     return _Table->column( @_ );
 }
@@ -118,6 +134,10 @@ sub unique {
 sub commit {
 }
 
+################
+# Relationship #
+################
+
 sub has_many {
 }
 
@@ -125,6 +145,32 @@ sub belongs_to {
 }
 
 sub has_one {
+}
+
+#########
+# Token #
+#########
+
+sub Type {
+    my $value = shift;
+    croak "Type requires a value" unless defined $value && length $value;
+    return DBICx::Sucrose::Token->new( kind => 'type', value => $value );
+}
+
+for (qw/Integer Number Text Blog/) {
+    my $type = $_;
+    __PACKAGE__->meta->add_method( $type => sub {
+        return DBICx::Sucrose::Token->new( kind => 'type', value => $type );
+    } );
+}
+*Int = \&Integer;
+
+sub NotNull {
+    return DBICx::Sucrose::Token->new( kind => 'nullable', value => 0 );
+}
+
+sub Null {
+    return DBICx::Sucrose::Token->new( kind => 'nullable', value => 1 );
 }
 
 =head1 AUTHOR

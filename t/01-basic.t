@@ -11,12 +11,21 @@ package t::Schema;
 
 use DBICx::Sucrose;
 
-table( 'Xyzzy' => 'xyzzy', sub {
+table( 'Artist' => sub {
 
-    column( 'apple' );
+    column 'name' => Text, NotNull;
+    column 'age' => Integer, Null;
 
 } );
 
+table( 'Cd' => sub {
+
+    column 'title' => Text, NotNull;
+    column 'SKU' => Type('CustomSKUType'), NotNull;
+
+} );
+
+no DBICx::Sucrose;
 
 package main;
 
