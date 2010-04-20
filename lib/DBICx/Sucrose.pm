@@ -39,34 +39,44 @@ our $VERSION = '0.01';
 use strict;
 use warnings;
 
-use Moose;
+use Any::Moose;
 use DBICx::Sucrose::Carp;
 
 use DBICx::Sucrose::Table;
 use DBICx::Sucrose::Token;
 use DBICx::Sucrose::Meta::Class::Table;
 
-use Moose::Exporter;
 use Class::MOP;
 use DBIx::Class();
 
-
 our ($Table);
 
-Moose::Exporter->setup_import_methods(
-    with_caller => [qw/ table /],
+use Mouse::Exporter;
+Mouse::Exporter->setup_import_methods(
     as_is => [qw/
+        table
         column unique commit
         has_many belongs_to has_one
         Type Integer Int Text Blob 
         NotNull Null
     /],
-    also => [qw/ Moose /],
+    with => [ any_moose ],
 );
-#    ( with_caller => [qw( has_table has_policy has_one has_many transform )],
-#      as_is       => [qw( inflate deflate handles )],
-#      also        => 'Moose'
-#    );
+
+#Moose::Exporter->setup_import_methods(
+#    with_caller => [qw/ table /],
+#    as_is => [qw/
+#        column unique commit
+#        has_many belongs_to has_one
+#        Type Integer Int Text Blob 
+#        NotNull Null
+#    /],
+#    also => [qw/ Moose /],
+#);
+##    ( with_caller => [qw( has_table has_policy has_one has_many transform )],
+##      as_is       => [qw( inflate deflate handles )],
+##      also        => 'Moose'
+##    );
 
 sub init_meta {
     shift;
@@ -91,7 +101,7 @@ sub _moniker_to_table_name {
 }
 
 sub table {
-    my $caller = shift;
+    my $caller = caller;
     if ($Table) {
         _Table->table( @_ );
     }

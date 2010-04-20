@@ -11,19 +11,19 @@ package t::Schema;
 
 use DBICx::Sucrose;
 
-table( 'Artist' => sub {
+#table( 'Artist' => sub {
 
-    column 'name' => Text, NotNull;
-    column 'age' => Integer, Null;
+#    column 'name' => Text, NotNull;
+#    column 'age' => Integer, Null;
 
-} );
+#} );
 
-table( 'Cd' => sub {
+#table( 'Cd' => sub {
 
-    column 'title' => Text, NotNull;
-    column 'SKU' => Type('CustomSKUType'), NotNull;
+#    column 'title' => Text, NotNull;
+#    column 'SKU' => Type('CustomSKUType'), NotNull;
 
-} );
+#} );
 
 no DBICx::Sucrose;
 

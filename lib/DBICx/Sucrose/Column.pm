@@ -22,7 +22,7 @@ sub attribute_hash {
 
     my %hash;
 
-    for my $token ($self->token_list) {
+    for my $token ( $self->token_list ) {
         if ( $token->kind eq 'type' ) {
             $hash{data_type} = $token->value;
         }
@@ -34,8 +34,8 @@ sub attribute_hash {
         }
     }
 
-    use XXX -dumper;
-    WWW \%hash;
+#    use XXX -dumper;
+#    WWW \%hash;
 
     return \%hash;
 }

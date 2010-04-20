@@ -1,7 +1,6 @@
 package DBICx::Sucrose::Token;
 
-use Moose;
-use MooseX::AttributeHelpers;
+use Any::Moose;
 use DBICx::Sucrose::Carp;
 
 use overload

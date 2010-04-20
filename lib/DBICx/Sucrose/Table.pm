@@ -1,7 +1,7 @@
 package DBICx::Sucrose::Table;
 
-use Moose;
-use MooseX::AttributeHelpers;
+use Any::Moose;
+use Any::Moose 'X::AttributeHelpers';
 use DBICx::Sucrose::Carp;
 
 use DBICx::Sucrose::Column;
