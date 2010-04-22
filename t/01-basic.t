@@ -11,6 +11,20 @@ package t::Schema;
 
 use DBICx::Sucrose;
 
+table( 'Artist' =>
+
+    name => Text, NotNull,
+    age => Integer, Null,
+
+);
+
+table( 'Cd' =>
+
+    title => Text, NotNull,
+    SKU => Type( 'CustomSKUType' ), NotNull,
+
+);
+
 #table( 'Artist' => sub {
 
 #    column 'name' => Text, NotNull;

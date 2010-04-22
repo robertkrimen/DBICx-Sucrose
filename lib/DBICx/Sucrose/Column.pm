@@ -4,13 +4,16 @@ use Moose;
 use MooseX::AttributeHelpers;
 use DBICx::Sucrose::Carp;
 
-has table => qw/is ro required 1 isa DBICx::Sucrose::Table/;
-has name => qw/is ro required 1 isa Str/;
+has table => qw/ is ro required 1 isa DBICx::Sucrose::Table /;
+has name => qw/ is ro required 1 isa Str /;
 
-has _token_list => qw/metaclass Collection::Array is ro required 1 isa ArrayRef/, default => sub { [] }, provides => {qw/
-    elements    token_list
-    push        push_token
-/};
+has _tokens => qw/ init_arg tokens metaclass Collection::Array is ro required 1 isa ArrayRef /,
+    default => sub { [] },
+    provides => {qw/
+        elements    tokens
+        push        push_token
+    /},
+;
 
 
 sub BUILD {

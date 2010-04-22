@@ -1,0 +1,271 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+package Sucrose;
+
+package Sucrose::Parser;
+
+use Any::Moose;
+
+use Mouse::Exporter;
+Mouse::Exporter->setup_import_methods(
+    as_is => [qw/
+        Type Integer Int Text Blob 
+        NotNull Null
+    /],
+    with => [ any_moose ],
+);
+
+for (qw/Integer Number Text Blog/) {
+    my $type = $_;
+    __PACKAGE__->meta->add_method( $type => sub {
+        return Sucrose::Parser::Token->new( kind => 'type', value => $type );
+    } );
+}
+#*Int = \&Integer;
+
+sub NotNull {
+    return Sucrose::Parser::Token->new( kind => 'nullable', value => 0 );
+}
+
+sub Null {
+    return Sucrose::Parser::Token->new( kind => 'nullable', value => 1 );
+}
+package Sucrose::Parser::Token;
+
+use Any::Moose;
+
+use Carp;
+
+has kind => qw/ is ro required 1 isa Str /;
+has value => qw/ is ro required 1 /;
+
+package Sucrose::Schema;
+
+use Any::Moose;
+
+use Carp;
+
+has _tables => qw/ metaclass Collection::Hash is ro lazy_build 1 isa HashRef /;
+sub _build__tables { {} }
+
+sub table {
+    my $self = shift;
+    my $name = shift;
+    my $table = $self->_tables->{$name} or croak "Invalid table ($name)";
+    return $table;
+}
+
+package Sucrose::Table;
+
+use Any::Moose;
+use Any::Moose 'X::AttributeHelpers';
+
+use Carp;
+
+has name => qw/ is rw isa Str lazy_build 1 /;
+sub _build_name { croak "Missing name" }
+
+#has _columns => qw/ metaclass Collection::Array is ro required 1 isa ArrayRef /,
+#    default => sub { [] },
+#    provides => {qw/
+#        elements    columns
+#        push        add_column
+#    /}
+#;
+has _columns => qw/ metaclass Collection::Hash is ro lazy_build 1 isa HashRef /;
+sub _build__columns { {} }
+
+sub column {
+    my $self = shift;
+    my $name = shift;
+    if ( @_ ) {
+        croak "Existing column ($name)" if $self->_columns->{$name};
+        $self->_columns->{$name} = shift;
+    }
+    else {
+        my $column = $self->_columns->{$name} or croak "Invalid column ($name)";
+        return $column;
+    }
+}
+
+has dbic => qw/ is ro lazy_build 1 /;
+sub _build_dbic { return Sucrose::Table::DBIC->new };
+
+package Sucrose::Table::DBIC;
+
+use Any::Moose;
+use Any::Moose 'X::AttributeHelpers';
+
+has _components => qw/ metaclass Collection::Array is rw lazy_build 1 isa ArrayRef /,
+    provides => {qw/
+        elements    components
+    /}
+;
+sub _build__components { [qw/ ? /] }
+
+package Sucrose::Column;
+
+use Any::Moose;
+
+use Carp;
+
+has name => qw/ is rw isa Str lazy_build 1 /;
+sub _build_name { croak "Missing name" }
+
+has type => qw/ is rw isa Str lazy_build 1 /;
+sub _build_type { croak "Missing type" }
+
+has nullable => qw/ is rw isa Str lazy_build 1 /;
+sub _build_nullable { '' }
+
+package main;
+
+use Test::Most;
+
+plan qw/ no_plan /;
+
+ok( 1 );
+
+use String::Util qw/ :all /;
+use Carp;
+
+my %macro = (
+    table => {
+        id => sub {
+        },
+        uuid => sub {
+        },
+    },
+    column => {
+    },
+);
+
+sub _invoke_macro {
+    my $category = shift;
+    my $name = shift;
+    my $target = shift;
+
+    croak "Unknown macro category ($category)" unless my $macro_category = $macro{$category};
+    croak "Unknown macro ($name)" unless my $macro = $macro_category->{$name};
+
+    $macro->( $target, @_ );
+}
+
+sub _parse_table {
+    my $table = shift;
+    my @input = @_;
+
+    my $column;
+    while ( @input ) {
+        if ( ! ref $input[0] ) {
+            if ( hascontent $input[0] && $input[0] =~ m/^\w/) {
+                my $name = shift @input;
+                $table->column( $name => ( $column = Sucrose::Column->new( name => $name ) ) );
+            }
+            elsif ( hascontent $input[0] && $input[0] =~ s/^-//) {
+                my $macro = shift @input;
+                if ( $column ) {
+                    _invoke_macro column => $macro, $column;
+                }
+                else {
+                    _invoke_macro table => $macro, $table;
+                }
+            }
+            else {
+                croak "Invalid table input (@input)";
+            }
+        }
+        elsif ( blessed $input[0] && $input[0]->isa( 'Sucrose::Parser::Token' ) ) {
+            my $token = shift @input;
+            if ( $column ) {
+                if ( $token->kind eq 'type' ) {
+                    $column->type( $token->value );
+                }
+                elsif ( $token->kind eq 'nullable' ) {
+                    $column->nullable( $token->value );
+                }
+                elsif ( $token->kind eq 'macro' ) {
+                    _invoke_macro column => $token->value, $column;
+                }
+                else {
+                    croak "Invalid token ($token) in column input (@input)";
+                }
+            }
+            else {
+                if ( $token->kind eq 'macro' ) {
+                    _invoke_macro table => $token->value, $table;
+                }
+                else {
+                    croak "Invalid token ($token) in table input (@input)";
+                }
+            }
+        }
+        else {
+            croak "Invalid table input (@input)";
+        }
+    }
+}
+
+sub parse {
+    my @input = @_;
+
+    my %schema;
+    while ( @input ) {
+        if ( ! ref $input[0] && ref $input[1] eq 'ARRAY' && hascontent $input[0] ) {
+            my $name = shift @input;
+            my @table_input = @{ shift @input };
+            my $table = Sucrose::Table->new( name => $name );
+            _parse_table $table => @table_input;
+            $schema{ $table->name } = $table;
+        }
+        else {
+            croak "Invalid input (@input)";
+        }
+    }
+
+    return \%schema;
+}
+
+BEGIN {
+    no strict 'refs';
+    for (qw/ Integer Text NotNull Null /) {
+        *$_ = \&{"Sucrose::Parser::$_"};
+    }
+
+}
+
+my $schema = parse(
+    Artist => [
+        -uuid,
+        name => Text, NotNull,
+        age => Integer, NotNull,
+    ],
+
+    Cd => [
+        title => Text, NotNull,
+        SKU => NotNull,
+    ],
+    
+);
+
+my ( $table, $column );
+
+{
+    ok( $table = $schema->{Artist} );
+    ok( $table->dbic );
+    cmp_deeply( $table->dbic->_components, [qw/ ? /] );
+    {
+        ok( $column = $table->column( 'name' ) );
+        is( $column->type,  'Text' );
+        is( $column->name,  'name' );
+        ok( defined $column->nullable );
+        ok( ! $column->nullable );
+    }
+}
+
+ok( $table = $schema->{Cd} );
+
+1;

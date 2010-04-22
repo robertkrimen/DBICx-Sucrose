@@ -48,8 +48,10 @@ use DBICx::Sucrose::Meta::Class::Table;
 
 use Class::MOP;
 use DBIx::Class();
+use Try::Tiny;
+use Carp;
 
-our ($Table);
+our ( $Table );
 
 use Mouse::Exporter;
 Mouse::Exporter->setup_import_methods(
@@ -119,16 +121,27 @@ sub table {
         $Table_class_meta->table( $Table );
         $Table->name( $table_name ) if $table_name;
 
-        my $code = shift;
-        if ($code) {
-            eval {
-                $code->();
-            };
-            if ($@) {
-                undef $Table;
-                die $@;
+        
+        try {
+
+            my @column;
+            for my $token ( @_ ) {
+                if ( ! ref $token ) {
+                    $token = DBICx::Sucrose::Token->new( kind => 'name', value => $token );
+                    $Table->column( @column ) if @column;
+                    @column = ( $token );
+                }
+                unless ( blessed $token && $token->isa( 'DBICx::Sucrose::Token' ) ) {
+                    croak "Invalid token ($token)";
+                }
             }
+            $Table->column( @column ) if @column;
+
+        } catch {
+            undef $Table;
+            die $@;
         }
+        
         _Table->register;
         undef $Table;
     }

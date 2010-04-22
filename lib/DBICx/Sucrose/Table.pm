@@ -6,26 +6,29 @@ use DBICx::Sucrose::Carp;
 
 use DBICx::Sucrose::Column;
 
-has schema_class => qw/is ro required 1/;
-has moniker => qw/is ro required 1/;
-has class => qw/is ro required 1/;
-has class_meta => qw/is ro lazy_build 1/;
+has schema_class => qw/ is ro required 1 /;
+has moniker => qw/ is ro required 1 /;
+has class => qw/ is ro required 1 /;
+has class_meta => qw/ is ro lazy_build 1 /;
 sub _build_class_meta {
     return shift->class->meta;
 }
 
-has _column_map => qw/is ro required 1 isa HashRef/, default => sub { {} };
+has _column_map => qw/ is ro required 1 isa HashRef /, default => sub { {} };
 sub column {
     my $self = shift;
-    my $name = shift;
-    my @given = @_;
+    my @column = @_;
+
+    my $name = shift @column;
+    my @tokens = @column;
+
     return $self->_column_map->{$name} ||= do {
         my @token_list;
         for (@given) {
-            next unless blessed $_ && $_->isa( 'DBICx::Sucrose::Token' );
             push @token_list, $_;
         }
-        my $column = DBICx::Sucrose::Column->new( table => $self, name => $name, _token_list => \@token_list );
+        my $column = DBICx::Sucrose::Column->new(
+            table => $self, name => $name, _token_list => \@token_list );
         $self->push_column( $column );
         $column;
     };
