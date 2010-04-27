@@ -8,6 +8,26 @@ package Sucrose;
 package Sucrose::Parser;
 
 use Any::Moose;
+use Carp;
+
+our $TCA = sub { # Table/Column Accessor
+    my $caller = caller;
+    my $name = shift;
+    my $error = shift;
+    $caller->meta->add_method( $name => sub {
+        my $self = shift;
+        if ( @_ ) {
+            my $value = shift;
+            croak $error if $error && ! defined $value;
+            return $self->{data}->{$name} = $value;
+        }
+        else {
+            my $value = $self->{data}->{$name};
+            croak $error if $error && ! defined $value;
+            return $value;
+        }
+    } );
+};
 
 use Mouse::Exporter;
 Mouse::Exporter->setup_import_methods(
@@ -18,29 +38,34 @@ Mouse::Exporter->setup_import_methods(
     with => [ any_moose ],
 );
 
-for (qw/Integer Number Text Blog/) {
+for (qw/ Integer Number Text Blob /) {
     my $type = $_;
     __PACKAGE__->meta->add_method( $type => sub {
-        return Sucrose::Parser::Token->new( kind => 'type', value => $type );
+        return Sucrose::Parser::Token->new( type => $type );
     } );
 }
 #*Int = \&Integer;
 
-sub NotNull {
-    return Sucrose::Parser::Token->new( kind => 'nullable', value => 0 );
-}
+sub NotNull { return Sucrose::Parser::Token->new( nullable => 0 ) }
+sub Null { return Sucrose::Parser::Token->new( nullable => 1 ) }
 
-sub Null {
-    return Sucrose::Parser::Token->new( kind => 'nullable', value => 1 );
-}
 package Sucrose::Parser::Token;
 
 use Any::Moose;
 
 use Carp;
 
-has kind => qw/ is ro required 1 isa Str /;
+has name => qw/ is ro required 1 isa Str /;
 has value => qw/ is ro required 1 /;
+has arguments => qw/ is ro isa Maybe[HashRef] /;
+
+sub BUILDARGS {
+    my $self = shift;
+    return { @_ } unless @_ <= 3;
+    my %given = ( name => shift, value => shift );
+    $given{arguments} = shift if @_;
+    return \%given;
+}
 
 package Sucrose::Schema;
 
@@ -65,8 +90,12 @@ use Any::Moose 'X::AttributeHelpers';
 
 use Carp;
 
-has name => qw/ is rw isa Str lazy_build 1 /;
-sub _build_name { croak "Missing name" }
+has data => qw/ is ro isa HashRef lazy_build 1 /;
+sub _build_data { {} }
+
+$TCA->( 'name' => 'Missing name' );
+$TCA->( 'type' => 'Missing type' );
+$TCA->( 'nullable' );
 
 #has _columns => qw/ metaclass Collection::Array is ro required 1 isa ArrayRef /,
 #    default => sub { [] },
@@ -109,17 +138,14 @@ sub _build__components { [qw/ ? /] }
 package Sucrose::Column;
 
 use Any::Moose;
-
 use Carp;
 
-has name => qw/ is rw isa Str lazy_build 1 /;
-sub _build_name { croak "Missing name" }
+has data => qw/ is ro isa HashRef lazy_build 1 /;
+sub _build_data { {} }
 
-has type => qw/ is rw isa Str lazy_build 1 /;
-sub _build_type { croak "Missing type" }
-
-has nullable => qw/ is rw isa Str lazy_build 1 /;
-sub _build_nullable { '' }
+$TCA->( 'name' => 'Missing name' );
+$TCA->( 'type' => 'Missing type' );
+$TCA->( 'nullable' );
 
 package main;
 
@@ -163,7 +189,9 @@ sub _parse_table {
         if ( ! ref $input[0] ) {
             if ( hascontent $input[0] && $input[0] =~ m/^\w/) {
                 my $name = shift @input;
-                $table->column( $name => ( $column = Sucrose::Column->new( name => $name ) ) );
+                $column = Sucrose::Column->new;
+                $column->name( $name );
+                $table->column( $column->name => $column );
             }
             elsif ( hascontent $input[0] && $input[0] =~ s/^-//) {
                 my $macro = shift @input;
@@ -181,26 +209,10 @@ sub _parse_table {
         elsif ( blessed $input[0] && $input[0]->isa( 'Sucrose::Parser::Token' ) ) {
             my $token = shift @input;
             if ( $column ) {
-                if ( $token->kind eq 'type' ) {
-                    $column->type( $token->value );
-                }
-                elsif ( $token->kind eq 'nullable' ) {
-                    $column->nullable( $token->value );
-                }
-                elsif ( $token->kind eq 'macro' ) {
-                    _invoke_macro column => $token->value, $column;
-                }
-                else {
-                    croak "Invalid token ($token) in column input (@input)";
-                }
+                $column->data->{ $token->name } = $token->value;
             }
             else {
-                if ( $token->kind eq 'macro' ) {
-                    _invoke_macro table => $token->value, $table;
-                }
-                else {
-                    croak "Invalid token ($token) in table input (@input)";
-                }
+                $table->data->{ $token->name } = $token->value;
             }
         }
         else {
@@ -217,7 +229,8 @@ sub parse {
         if ( ! ref $input[0] && ref $input[1] eq 'ARRAY' && hascontent $input[0] ) {
             my $name = shift @input;
             my @table_input = @{ shift @input };
-            my $table = Sucrose::Table->new( name => $name );
+            my $table = Sucrose::Table->new;
+            $table->name( $name );
             _parse_table $table => @table_input;
             $schema{ $table->name } = $table;
         }
