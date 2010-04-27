@@ -70,7 +70,6 @@ sub BUILDARGS {
 package Sucrose::Schema;
 
 use Any::Moose;
-
 use Carp;
 
 has _tables => qw/ metaclass Collection::Hash is ro lazy_build 1 isa HashRef /;
@@ -83,12 +82,27 @@ sub table {
     return $table;
 }
 
+has dbic_class => qw/ is rw isa Str required 1 /;
+
+sub load {
+    my $self = shift;
+
+    my $class = $self->dbic_class;
+    Mouse::Meta::Class->initialize( $class )->superclasses(qw/ DBIx::Class::Schema /);
+
+    for my $table (values %{ $self->_tables }) {
+        $table->load;
+    }
+}
+
 package Sucrose::Table;
 
 use Any::Moose;
 use Any::Moose 'X::AttributeHelpers';
 
 use Carp;
+
+has schema => qw/ is ro required 1 weak_ref 1 /;
 
 has data => qw/ is ro isa HashRef lazy_build 1 /;
 sub _build_data { {} }
@@ -120,25 +134,66 @@ sub column {
     }
 }
 
-has dbic => qw/ is ro lazy_build 1 /;
-sub _build_dbic { return Sucrose::Table::DBIC->new };
+sub load {
+    my $self = shift;
 
-package Sucrose::Table::DBIC;
+    my $class = $self->dbic_class;
+    Mouse::Meta::Class->initialize( $class )->superclasses(qw/ DBIx::Class /);
+    my $schema_class = $self->schema->dbic_class;
 
-use Any::Moose;
-use Any::Moose 'X::AttributeHelpers';
+    $class->load_components( $self->dbic_load_components );
+    $class->table( $self->dbic_table );
 
-has _components => qw/ metaclass Collection::Array is rw lazy_build 1 isa ArrayRef /,
+    for my $column (values %{ $self->_columns }) {
+        $column->load;
+    }
+
+    $schema_class->register_class( $self->name, $class );
+}
+
+has __dbic_load_components => qw/ metaclass Collection::Array is rw lazy_build 1 isa ArrayRef /,
     provides => {qw/
-        elements    components
+        elements    _dbic_load_components
     /}
 ;
-sub _build__components { [qw/ ? /] }
+sub _build___dbic_load_components { [qw/ ? /] }
+
+sub dbic_load_components {
+    my $self = shift;
+    return map { $_ ne '?' ? $_ : qw/ PK::Auto Core / } $self->_dbic_load_components;
+}
+
+has dbic_class => qw/ is rw isa Str lazy_build 1 /;
+sub _build_dbic_class {
+    my $self = shift;
+    return join '::', $self->schema->dbic_class, 'Result', $self->name;
+}
+#    # TODO X::
+#    Mouse::Meta::Class->initialize( $class );
+#    return $class;
+#}
+
+has dbic_table => qw/ is rw isa Str lazy_build 1 /;
+sub _build_dbic_table {
+    my $self = shift;
+
+    my $name = $self->name;
+    my $table = lc $name;
+    $table =~ s/::/_/g;
+
+    croak "Going from name \"$name\" to table \"$table\" looks weird" if $table =~ m/[^\w_\.]/;
+
+    return $table;
+}
 
 package Sucrose::Column;
 
 use Any::Moose;
 use Carp;
+
+has schema => qw/ is ro lazy_build 1 weak_ref 1 /;
+sub _build_schema { shift->table->schema }
+has table => qw/ is ro required 1 weak_ref 1 /;
 
 has data => qw/ is ro isa HashRef lazy_build 1 /;
 sub _build_data { {} }
@@ -146,6 +201,16 @@ sub _build_data { {} }
 $TCA->( 'name' => 'Missing name' );
 $TCA->( 'type' => 'Missing type' );
 $TCA->( 'nullable' );
+
+sub load {
+    my $self = shift;
+    $self->table->dbic_class->add_column(
+        $self->name, {
+            data_type => $self->type,
+            nullable => $self->nullable,
+        },
+    );
+}
 
 package main;
 
@@ -189,7 +254,7 @@ sub _parse_table {
         if ( ! ref $input[0] ) {
             if ( hascontent $input[0] && $input[0] =~ m/^\w/) {
                 my $name = shift @input;
-                $column = Sucrose::Column->new;
+                $column = Sucrose::Column->new( table => $table );
                 $column->name( $name );
                 $table->column( $column->name => $column );
             }
@@ -224,22 +289,23 @@ sub _parse_table {
 sub parse {
     my @input = @_;
 
-    my %schema;
+    my $schema = Sucrose::Schema->new( dbic_class => 'Schema' );
+
     while ( @input ) {
         if ( ! ref $input[0] && ref $input[1] eq 'ARRAY' && hascontent $input[0] ) {
             my $name = shift @input;
             my @table_input = @{ shift @input };
-            my $table = Sucrose::Table->new;
+            my $table = Sucrose::Table->new( schema => $schema );
             $table->name( $name );
+            $schema->_tables->{ $table->name } = $table;
             _parse_table $table => @table_input;
-            $schema{ $table->name } = $table;
         }
         else {
             croak "Invalid input (@input)";
         }
     }
 
-    return \%schema;
+    return $schema;
 }
 
 BEGIN {
@@ -259,16 +325,15 @@ my $schema = parse(
 
     Cd => [
         title => Text, NotNull,
-        SKU => NotNull,
+        SKU => Text, NotNull,
     ],
 );
 
 my ( $table, $column );
 
 {
-    ok( $table = $schema->{Artist} );
-    ok( $table->dbic );
-    cmp_deeply( $table->dbic->_components, [qw/ ? /] );
+    ok( $table = $schema->table( 'Artist' ) );
+    cmp_deeply( $table->__dbic_load_components, [qw/ ? /] );
     {
         ok( $column = $table->column( 'name' ) );
         is( $column->type,  'Text' );
@@ -278,6 +343,12 @@ my ( $table, $column );
     }
 }
 
-ok( $table = $schema->{Cd} );
+ok( $table = $schema->table( 'Cd' ) );
+
+$schema->load;
+my $_schema = $schema->dbic_class->connect( "dbi:SQLite:dbname=test.sqlite" );
+my $deploy = $_schema->deployment_statements( undef, undef, undef, { add_drop_table => 1 } );
+my @deploy = split m/;\n/, $deploy;
+warn join "\n", @deploy, '';
 
 1;
