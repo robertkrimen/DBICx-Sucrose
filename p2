@@ -1,0 +1,60 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+package main;
+
+use Test::Most;
+
+plan qw/ no_plan /;
+
+ok( 1 );
+
+use DBICx::Sucrose;
+use Carp;
+
+BEGIN {
+    no strict 'refs';
+    for (qw/ Integer Text NotNull Null /) {
+        *$_ = \&{"DBICx::Sucrose::Parser::$_"};
+    }
+
+}
+
+my $schema = DBICx::Sucrose->parse(
+    Artist => [
+        -uuid,
+        name => Text, NotNull,
+        age => Integer, NotNull,
+    ],
+
+    Cd => [
+        title => Text, NotNull,
+        SKU => Text, NotNull,
+    ],
+);
+
+my ( $table, $column );
+
+{
+    ok( $table = $schema->table( 'Artist' ) );
+    cmp_deeply( $table->__dbic_load_components, [qw/ ? /] );
+    {
+        ok( $column = $table->column( 'name' ) );
+        is( $column->type,  'Text' );
+        is( $column->name,  'name' );
+        ok( defined $column->nullable );
+        ok( ! $column->nullable );
+    }
+}
+
+ok( $table = $schema->table( 'Cd' ) );
+
+$schema->load;
+my $_schema = $schema->dbic_class->connect( "dbi:SQLite:dbname=test.sqlite" );
+my $deploy = $_schema->deployment_statements( undef, undef, undef, { add_drop_table => 1 } );
+my @deploy = split m/;\n/, $deploy;
+warn join "\n", @deploy, '';
+
+1;

@@ -1,46 +1,39 @@
 package DBICx::Sucrose::Column;
 
-use Moose;
-use MooseX::AttributeHelpers;
+use strict;
+use warnings;
+
+use Any::Moose;
 use DBICx::Sucrose::Carp;
 
-has table => qw/ is ro required 1 isa DBICx::Sucrose::Table /;
-has name => qw/ is ro required 1 isa Str /;
+use DBICx::Sucrose::Parser;
+my $HAS = $DBICx::Sucrose::Parser::HAS;
 
-has _tokens => qw/ init_arg tokens metaclass Collection::Array is ro required 1 isa ArrayRef /,
-    default => sub { [] },
-    provides => {qw/
-        elements    tokens
-        push        push_token
-    /},
-;
+has schema => qw/ is ro lazy_build 1 weak_ref 1 /;
+sub _build_schema { shift->table->schema }
+has table => qw/ is ro required 1 weak_ref 1 /;
 
+has data => qw/ is ro isa HashRef lazy_build 1 /;
+sub _build_data { {} }
+
+$HAS->( 'name' => 'Missing name' );
+$HAS->( 'type' => 'Missing type' );
+$HAS->( 'nullable' );
 
 sub BUILD {
     my $self = shift;
+    my $given = shift;
+    defined $given->{$_} and ( $self->data->{ $_ } = $given->{$_} ) for qw/ name type nullable /;
 }
 
-sub attribute_hash {
+sub load {
     my $self = shift;
-
-    my %hash;
-
-    for my $token ( $self->token_list ) {
-        if ( $token->kind eq 'type' ) {
-            $hash{data_type} = $token->value;
-        }
-        elsif ( $token->kind eq 'nullable' ) {
-            $hash{is_nullable} = $token->value;
-        }
-        else {
-            croak "Don't understand token $token";
-        }
-    }
-
-#    use XXX -dumper;
-#    WWW \%hash;
-
-    return \%hash;
+    $self->table->dbic_class->add_column(
+        $self->name, {
+            data_type => $self->type,
+            nullable => $self->nullable,
+        },
+    );
 }
 
 1;
