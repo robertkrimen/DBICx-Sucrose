@@ -46,6 +46,20 @@ sub column {
     }
 }
 
+has _on => qw/ is ro isa HashRef lazy_build 1 /;
+sub _build__on { {} }
+
+sub on {
+    my $self = shift;
+    my $type = shift;
+    if ( @_ ) {
+        push @{ $self->_on->{$type} }, @_;
+    }
+    else {
+        return @{ $self->_on->{$type} ||= [] };
+    }
+}
+
 sub load {
     my $self = shift;
 
@@ -59,6 +73,8 @@ sub load {
     for my $column (values %{ $self->_columns }) {
         $column->load;
     }
+
+    $_->( $self ) for $self->on( 'load' );
 
     $schema_class->register_class( $self->name, $class );
 }

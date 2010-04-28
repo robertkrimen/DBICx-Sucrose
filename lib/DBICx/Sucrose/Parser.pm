@@ -37,6 +37,7 @@ Mouse::Exporter->setup_import_methods(
     as_is => [qw/
         Type Integer Int Text Blob 
         NotNull Null
+        Unique
     /],
     with => [ any_moose ],
 );
@@ -51,6 +52,8 @@ for (qw/ Integer Number Text Blob /) {
 
 sub NotNull { return DBICx::Sucrose::Parser::Token->new( nullable => 0 ) }
 sub Null { return DBICx::Sucrose::Parser::Token->new( nullable => 1 ) }
+
+sub Unique { return DBICx::Sucrose::Parser::Token::Unique->new( @_ ) }
 
 my %macro = (
     table => {
@@ -95,7 +98,7 @@ sub _parse_table {
                 croak "Invalid table input (@input)";
             }
         }
-        elsif ( blessed $input[0] && $input[0]->isa( 'DBICx::Sucrose::Parser::Token' ) ) {
+        elsif ( blessed $input[0] && $input[0]->can( 'apply' ) ) { # && $input[0]->isa( 'DBICx::Sucrose::Parser::Token' ) ) {
             my $token = shift @input;
             if ( $column )  { $token->apply( $column ) }
             else            { $token->apply( $table ) }
@@ -153,6 +156,32 @@ sub apply {
     my $self = shift;
     my $target = shift;
     $target->data->{ $self->name } = $self->value;
+}
+
+package DBICx::Sucrose::Parser::Token::Unique;
+
+use strict;
+use warnings;
+
+use Any::Moose;
+use DBICx::Sucrose::Carp;
+
+has arguments => qw/ is ro isa Maybe[HashRef] /;
+
+sub apply {
+    my $self = shift;
+    my $target = shift;
+
+    if ( $self->arguments ) {
+        die "Not ready"
+    }
+    else {
+        die "Invalid target for argumentless unique" unless $target->can( 'table' );
+        $target->table->on( load => sub {
+            my $table = shift;
+            $table->dbic_class->add_unique_constraint([ $target->name, $target->name ]);
+        } );
+    }
 }
 
 1;

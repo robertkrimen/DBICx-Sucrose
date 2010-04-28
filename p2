@@ -16,7 +16,7 @@ use Carp;
 
 BEGIN {
     no strict 'refs';
-    for (qw/ Integer Text NotNull Null /) {
+    for (qw/ Integer Text NotNull Null Unique /) {
         *$_ = \&{"DBICx::Sucrose::Parser::$_"};
     }
 
@@ -30,7 +30,7 @@ my $schema = DBICx::Sucrose->parse(
     ],
 
     Cd => [
-        title => Text, NotNull,
+        title => Text, NotNull, Unique,
         SKU => Text, NotNull,
     ],
 );
