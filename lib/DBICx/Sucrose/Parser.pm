@@ -32,15 +32,17 @@ use DBICx::Sucrose::Schema;
 use DBICx::Sucrose::Table;
 use DBICx::Sucrose::Column;
 
-use Mouse::Exporter;
-Mouse::Exporter->setup_import_methods(
-    as_is => [qw/
-        Type Integer Int Text Blob 
-        NotNull Null
-        Unique
-    /],
-    with => [ any_moose ],
-);
+use Package::Pkg;
+
+#use Mouse::Exporter;
+#Mouse::Exporter->setup_import_methods(
+#    as_is => [qw/
+#        Type Integer Int Text Blob 
+#        NotNull Null
+#        Unique
+#    /],
+#    with => [ any_moose ],
+#);
 
 for (qw/ Integer Number Text Blob /) {
     my $type = $_;

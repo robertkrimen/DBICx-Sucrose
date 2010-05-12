@@ -15,10 +15,10 @@ use DBICx::Sucrose;
 use Carp;
 
 BEGIN {
-    no strict 'refs';
-    for (qw/ Integer Text NotNull Null Unique /) {
-        *$_ = \&{"DBICx::Sucrose::Parser::$_"};
-    }
+#    no strict 'refs';
+#    for (qw/ Integer Text NotNull Null Unique /) {
+#        *$_ = \&{"DBICx::Sucrose::Parser::$_"};
+#    }
 
 }
 
