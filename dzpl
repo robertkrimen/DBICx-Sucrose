@@ -1,0 +1,17 @@
+#!/usr/bin/env perl
+use Dzpl
+    name => 'DBICx-Sucrose',
+    version => '0.0010',
+    author => 'Robert Krimen <robertkrimen@gmail.com>',
+    license => 'Perl5',
+    copyright => 'Robert Krimen',
+
+    require => q/
+        [Test]
+        Test::Most
+    /;
+;
+
+{ plugin '@ROKR' }
+
+run;

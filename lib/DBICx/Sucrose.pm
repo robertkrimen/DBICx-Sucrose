@@ -1,15 +1,5 @@
 package DBICx::Sucrose;
-
-use warnings;
-use strict;
-
-=head1 VERSION
-
-Version 0.001
-
-=cut
-
-our $VERSION = '0.001';
+# ABSTRACT: Syntactic sugar for DBIx::Class
 
 use Any::Moose;
 use DBICx::Sucrose::Carp;
